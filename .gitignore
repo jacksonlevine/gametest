@@ -1,0 +1,6 @@
+/build
+relrun.bat
+debrun.bat
+/.idea
+/cmake-build-debug-visual-studio
+/cmake-build-release-visual-studio
