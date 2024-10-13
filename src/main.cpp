@@ -10,6 +10,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 // #define TINYGLTF_NOEXCEPTION // optional. disable exception handling.
+#include "ModelLoader.h"
 #include "tiny_gltf.h"
 
 GLFWwindow* window = nullptr;
@@ -39,6 +40,8 @@ int main() {
     {
         std::cout << "Couldn't initialize glew! \n";
     }
+
+    tinygltf::Model playmodel = jl::ModelLoader::loadModel("assets/models/player.glb");
 
     glClearColor(0.5, 0.5, 0.5, 1.0);
 
