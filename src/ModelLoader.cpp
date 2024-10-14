@@ -3,10 +3,12 @@
 //
 
 #include "ModelLoader.h"
+#include <cassert>
+
 
 namespace jl {
 
-GLenum getGLType(int componentType) {
+GLenum getGLTypeFromTinyGLTFComponentType(int componentType) {
     switch (componentType) {
     case TINYGLTF_COMPONENT_TYPE_BYTE: return GL_BYTE;
     case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE: return GL_UNSIGNED_BYTE;
@@ -15,7 +17,7 @@ GLenum getGLType(int componentType) {
     case TINYGLTF_COMPONENT_TYPE_INT: return GL_INT;
     case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT: return GL_UNSIGNED_INT;
     case TINYGLTF_COMPONENT_TYPE_FLOAT: return GL_FLOAT;
-    default: return GL_FLOAT; // Default fallback
+    default: return GL_FLOAT;
     }
 }
 
@@ -67,11 +69,9 @@ ModelAndTextures ModelLoader::loadModel(const char* path)
             const auto* texCoordBufferData = reinterpret_cast<const float*>(&texCoordBuffer.data[texCoordBufferView.byteOffset + texCoordAccessor.byteOffset]);
 
 
-            // Determine stride for position data
             size_t posStride = positionAccessor.ByteStride(positionBufferView);
             if (posStride == 0) posStride = sizeof(float) * 3; // Default stride if not specified
 
-            // Determine stride for texture coordinate data
             size_t texStride = texCoordAccessor.ByteStride(texCoordBufferView);
             if (texStride == 0) texStride = sizeof(float) * 2; // Default stride if not specified
 
@@ -86,14 +86,14 @@ ModelAndTextures ModelLoader::loadModel(const char* path)
 
             glBindVertexArray(vao);
 
-            GLenum postype = getGLType(positionAccessor.componentType);
+            GLenum postype = getGLTypeFromTinyGLTFComponentType(positionAccessor.componentType);
             // Upload vertex position data
             glBindBuffer(GL_ARRAY_BUFFER, vbo);
             glBufferData(GL_ARRAY_BUFFER, positionBufferView.byteLength, positionBufferData, GL_STATIC_DRAW);
             glVertexAttribPointer(0, 3, postype, GL_FALSE, posStride, (void*)0);  // Assume 3 floats per position
             glEnableVertexAttribArray(0);
 
-            GLenum textype = getGLType(positionAccessor.componentType);
+            GLenum textype = getGLTypeFromTinyGLTFComponentType(texCoordAccessor.componentType);
             // Upload texture coordinate data
             glBindBuffer(GL_ARRAY_BUFFER, texvbo);
             glBufferData(GL_ARRAY_BUFFER, texCoordBufferView.byteLength, texCoordBufferData, GL_STATIC_DRAW);
@@ -101,7 +101,7 @@ ModelAndTextures ModelLoader::loadModel(const char* path)
             glEnableVertexAttribArray(1);
 
             // Upload index data
-            GLenum indextype = getGLType(indexAccessor.componentType);
+            GLenum indextype = getGLTypeFromTinyGLTFComponentType(indexAccessor.componentType);
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
             glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexBufferView.byteLength, indexBufferData, GL_STATIC_DRAW);
 
@@ -127,6 +127,8 @@ ModelAndTextures ModelLoader::loadModel(const char* path)
 
         glBindTexture(GL_TEXTURE_2D, texid);
 
+        GLenum pixtype = getGLTypeFromTinyGLTFComponentType(image.pixel_type);
+
         GLenum format = GL_RGB;
         if (image.component == 1) {
             format = GL_RED;
@@ -142,20 +144,21 @@ ModelAndTextures ModelLoader::loadModel(const char* path)
             format,           // internal format
             image.width,      // width
             image.height,     // height
-            0,                // border (must be 0)
+            0,                // border (this must be 0 according to gl docs lol)
             format,           // format of the pixel data
-            GL_UNSIGNED_BYTE, // type of the pixel data
+            pixtype,          // type of the pixel data
             &image.image[0]   // pointer to the actual pixel data
         );
 
+
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
         texids.push_back(texid);
     }
-
+    std::cout << "Texids len: " << std::to_string(texids.size()) << "\n";
     return ModelAndTextures{modelGLObjects, texids};
 }
 

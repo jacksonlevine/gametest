@@ -29,6 +29,7 @@ jl::Camera CAMERA;
 jl::Shader* SHADER; //This must be initialized after the GL context, so it's a pointer
 
 bool FIRSTMOUSE = true;
+bool MOUSECAPTURED = false;
 
 void frameBufferCallback(GLFWwindow* window, int width, int height)
 {
@@ -42,23 +43,26 @@ void cursorPosCallback(GLFWwindow* window, double xpos, double ypos)
     static double lastx = 0.0;
     static double lasty = 0.0;
 
-    if(FIRSTMOUSE)
+    if(MOUSECAPTURED)
     {
+        if(FIRSTMOUSE)
+        {
+            lastx = xpos;
+            lasty = ypos;
+            FIRSTMOUSE = false;
+        }
+
+        const double xOffset = (xpos - lastx) * 0.25;
+        const double yOffset = (lasty - ypos) * 0.25;
+
+        //std::cout << "Yaw: " << std::to_string(CAMERA.transform.yaw) << " Pitch: " << std::to_string(CAMERA.transform.pitch) << "\n";
+
+        CAMERA.transform.yaw += static_cast<float>(xOffset);
+        CAMERA.transform.pitch += static_cast<float>(yOffset);
+
         lastx = xpos;
         lasty = ypos;
-        FIRSTMOUSE = false;
     }
-
-    const double xOffset = (xpos - lastx) * 0.25;
-    const double yOffset = (lasty - ypos) * 0.25;
-
-    //std::cout << "Yaw: " << std::to_string(CAMERA.transform.yaw) << " Pitch: " << std::to_string(CAMERA.transform.pitch) << "\n";
-
-    CAMERA.transform.yaw += static_cast<float>(xOffset);
-    CAMERA.transform.pitch += static_cast<float>(yOffset);
-
-    lastx = xpos;
-    lasty = ypos;
 }
 
 void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
@@ -68,87 +72,31 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
         if(button == GLFW_MOUSE_BUTTON_1)
         {
             glfwSetInputMode(WINDOW, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+            MOUSECAPTURED = true;
         } else
         {
             glfwSetInputMode(WINDOW, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            MOUSECAPTURED = false;
+            FIRSTMOUSE = true;
         }
     }
 }
 
-void shittydraw()
+void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-    // Vertex data for a simple triangle
-    float positions[] = {
-        -0.5f, -0.5f, 0.0f,
-         0.5f, -0.5f, 0.0f,
-         0.0f,  0.5f, 0.0f
-    };
-
-    float texCoords[] = {
-        0.0f, 0.0f,
-        1.0f, 0.0f,
-        0.5f, 1.0f
-    };
-
-    // Create and bind a VAO
-        static GLuint VAO = 0;
-        static GLuint posVBO;
-        static GLuint texVBO;
-
-    if (VAO == 0)
+    if(action)
     {
-        glGenVertexArrays(1, &VAO);
-        glGenBuffers(1, &texVBO);
-        glGenBuffers(1, &posVBO);
+        if(key == GLFW_KEY_W)
+        {
+            CAMERA.transform.position += CAMERA.transform.direction * 0.1f;
+            CAMERA.updateWithYawPitch(CAMERA.transform.yaw, CAMERA.transform.pitch);
+        }
+        if(key == GLFW_KEY_S)
+        {
+            CAMERA.transform.position -= CAMERA.transform.direction * 0.1f;
+            CAMERA.updateWithYawPitch(CAMERA.transform.yaw, CAMERA.transform.pitch);
+        }
     }
-
-    glBindVertexArray(VAO);
-
-    // Create and bind VBO for positions
-
-
-    glBindBuffer(GL_ARRAY_BUFFER, posVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(positions), positions, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-
-    // Create and bind VBO for texture coordinates
-
-
-    glBindBuffer(GL_ARRAY_BUFFER, texVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(texCoords), texCoords, GL_STATIC_DRAW);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(1);
-
-    // Use your shader program
-    glUseProgram(SHADER->shaderID);
-
-    // Set up a simple orthographic projection
-    glm::mat4 projection = glm::ortho(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f);
-    glUniformMatrix4fv(glGetUniformLocation(SHADER->shaderID, "mvp"), 1, GL_FALSE, glm::value_ptr(projection));
-
-    // Set the position uniform to (0, 0, 0)
-    glUniform3f(glGetUniformLocation(SHADER->shaderID, "pos"), 0.0f, 0.0f, 0.0f);
-
-    // Create a simple white texture
-    GLuint texture;
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    unsigned char white[] = {255, 255, 255, 255};
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, white);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-    // Bind the texture to texture unit 0
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glUniform1i(glGetUniformLocation(SHADER->shaderID, "texture1"), 0);
-
-    // Draw the triangle
-    glDrawArrays(GL_TRIANGLES, 0, 3);
-
-
-
 }
 
 int main() {
@@ -165,9 +113,12 @@ int main() {
     WINDOW = glfwCreateWindow(SCREENWIDTH.load(), SCREENHEIGHT.load(), "Game", nullptr, nullptr);
     glfwMakeContextCurrent(WINDOW);
 
+    glfwSwapInterval( 0 ); //Disable v-sync supposedly?
+
     glfwSetFramebufferSizeCallback(WINDOW, frameBufferCallback);
     glfwSetCursorPosCallback(WINDOW, cursorPosCallback);
     glfwSetMouseButtonCallback(WINDOW, mouseButtonCallback);
+    glfwSetKeyCallback(WINDOW, keyCallback);
 
     if(glewInit() != GLEW_OK)
     {
@@ -177,7 +128,7 @@ int main() {
     jl::Shader gltfShader = getBasicGLTFShader();
     SHADER = &gltfShader;
 
-    jl::ModelAndTextures modelandtexs = jl::ModelLoader::loadModel("assets/models/AntiqueCamera.glb");
+    jl::ModelAndTextures modelandtexs = jl::ModelLoader::loadModel("assets/models/player.glb");
 
 
 
@@ -187,16 +138,9 @@ int main() {
     glEnable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
 
-
-
-
-
-
     while(!glfwWindowShouldClose(WINDOW))
     {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        //shittydraw();
 
         const int currentSW = SCREENWIDTH.load();
         const int currentSH = SCREENHEIGHT.load();
@@ -211,11 +155,11 @@ int main() {
         }
 
         CAMERA.updateWithYawPitch(CAMERA.transform.yaw, CAMERA.transform.pitch);
-        //CAMERA.printCameraValues();
+
         glUseProgram(SHADER->shaderID);
 
 
-        //glUniformMatrix4fv(glGetUniformLocation(SHADER->shaderID, "mvp"), 1, GL_FALSE, glm::value_ptr(CAMERA.mvp));
+        glUniformMatrix4fv(glGetUniformLocation(SHADER->shaderID, "mvp"), 1, GL_FALSE, glm::value_ptr(CAMERA.mvp));
 
 
         for(jl::ModelGLObjects &mglo : modelandtexs.modelGLObjects)
@@ -223,7 +167,6 @@ int main() {
             //std::cout << "Index count: " << std::to_string(mglo.indexcount) << "\n";
             glBindVertexArray(mglo.vao);
 
-            glUniformMatrix4fv(glGetUniformLocation(SHADER->shaderID, "mvp"), 1, GL_FALSE, glm::value_ptr(CAMERA.mvp));
 
 
             glActiveTexture(GL_TEXTURE0);
@@ -231,9 +174,9 @@ int main() {
             glUniform1i(glGetUniformLocation(SHADER->shaderID, "texture1"), 0);
 
 
-            glUniform3f(glGetUniformLocation(SHADER->shaderID, "pos"), 0.0, 0.0, 7.0);
+            glUniform3f(glGetUniformLocation(SHADER->shaderID, "pos"), 0.0, 0.0, 3.0);
             glDrawElements(mglo.drawmode, mglo.indexcount, mglo.indextype, nullptr);
-    
+
             glBindVertexArray(0);
         }
         GLenum err;
