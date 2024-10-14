@@ -144,6 +144,7 @@ int main() {
 
         CAMERA.updateWithYawPitch(CAMERA.transform.yaw, CAMERA.transform.pitch);
 
+        //Using the shader, uploading its uniform values, and drawing the one model (for now)
         glUseProgram(SHADER->shaderID);
 
         glUniformMatrix4fv(glGetUniformLocation(SHADER->shaderID, "mvp"), 1, GL_FALSE, glm::value_ptr(CAMERA.mvp));
