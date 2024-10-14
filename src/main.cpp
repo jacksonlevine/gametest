@@ -24,6 +24,7 @@ GLFWwindow* WINDOW = nullptr;
 std::atomic<int> SCREENWIDTH = 1280;
 std::atomic<int> SCREENHEIGHT = 720;
 std::atomic<float> FOV = 90.0f;
+std::atomic<bool> CAMERA_PROJECTION_UPDATE_REQUESTED = true;
 
 jl::Camera CAMERA;
 jl::Shader* SHADER; //This must be initialized after the GL context, so it's a pointer
@@ -35,6 +36,7 @@ void frameBufferCallback(GLFWwindow* window, int width, int height)
 {
     std::cout << std::to_string(width) << " " << std::to_string(height) << "\n";
     SCREENWIDTH.store(width); SCREENHEIGHT.store(height);
+    CAMERA_PROJECTION_UPDATE_REQUESTED.store(true);
     glViewport(0, 0, width, height);
 }
 
@@ -101,10 +103,6 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 
 int main() {
 
-    static int LAST_SCREEN_HEIGHT = 0;
-    static int LAST_SCREEN_WIDTH = 0;
-    static float LAST_FOV = 0.0f;
-
     if (glfwInit() != GLFW_TRUE)
     {
         std::cout << "Couldn't initialize glfw.\n";
@@ -112,9 +110,7 @@ int main() {
 
     WINDOW = glfwCreateWindow(SCREENWIDTH.load(), SCREENHEIGHT.load(), "Game", nullptr, nullptr);
     glfwMakeContextCurrent(WINDOW);
-
-    glfwSwapInterval( 0 ); //Disable v-sync supposedly?
-
+    glfwSwapInterval( 0 ); //Disable v-sync
     glfwSetFramebufferSizeCallback(WINDOW, frameBufferCallback);
     glfwSetCursorPosCallback(WINDOW, cursorPosCallback);
     glfwSetMouseButtonCallback(WINDOW, mouseButtonCallback);
@@ -125,66 +121,51 @@ int main() {
         std::cout << "Couldn't initialize glew! \n";
     }
 
-    jl::Shader gltfShader = getBasicGLTFShader();
-    SHADER = &gltfShader;
-
-    jl::ModelAndTextures modelandtexs = jl::ModelLoader::loadModel("assets/models/player.glb");
-
-
-
+    //Now in GL context
 
     glViewport(0, 0, SCREENWIDTH.load(), SCREENHEIGHT.load());
     glClearColor(0.5, 0.5, 0.5, 1.0);
     glEnable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
 
+    jl::Shader gltfShader = getBasicGLTFShader();
+    SHADER = &gltfShader;
+
+    jl::ModelAndTextures modelandtexs = jl::ModelLoader::loadModel("assets/models/player.glb");
+
     while(!glfwWindowShouldClose(WINDOW))
     {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        const int currentSW = SCREENWIDTH.load();
-        const int currentSH = SCREENHEIGHT.load();
-        const float currentFOV = FOV.load();
-
-        if(LAST_FOV != currentFOV || LAST_SCREEN_WIDTH != currentSW || LAST_SCREEN_HEIGHT != currentSH)
+        if(CAMERA_PROJECTION_UPDATE_REQUESTED.load())
         {
-            CAMERA.updateProjection(currentSW, currentSH, currentFOV);
-            LAST_FOV = currentFOV;
-            LAST_SCREEN_WIDTH = currentSW;
-            LAST_SCREEN_HEIGHT = currentSH;
+            CAMERA.updateProjection(SCREENWIDTH.load(), SCREENHEIGHT.load(), FOV.load());
         }
 
         CAMERA.updateWithYawPitch(CAMERA.transform.yaw, CAMERA.transform.pitch);
 
         glUseProgram(SHADER->shaderID);
 
-
         glUniformMatrix4fv(glGetUniformLocation(SHADER->shaderID, "mvp"), 1, GL_FALSE, glm::value_ptr(CAMERA.mvp));
-
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, modelandtexs.texids.at(0));
+        glUniform1i(glGetUniformLocation(SHADER->shaderID, "texture1"), 0);
+        glUniform3f(glGetUniformLocation(SHADER->shaderID, "pos"), 0.0, 0.0, 3.0);
 
         for(jl::ModelGLObjects &mglo : modelandtexs.modelGLObjects)
         {
-            //std::cout << "Index count: " << std::to_string(mglo.indexcount) << "\n";
             glBindVertexArray(mglo.vao);
-
-
-
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, modelandtexs.texids.at(0));
-            glUniform1i(glGetUniformLocation(SHADER->shaderID, "texture1"), 0);
-
-
-            glUniform3f(glGetUniformLocation(SHADER->shaderID, "pos"), 0.0, 0.0, 3.0);
-            glDrawElements(mglo.drawmode, mglo.indexcount, mglo.indextype, nullptr);
+            //Indent operations on this vertex array object
+                glDrawElements(mglo.drawmode, mglo.indexcount, mglo.indextype, nullptr);
 
             glBindVertexArray(0);
         }
+
+        //Flush out any GL errors
         GLenum err;
         while ((err = glGetError()) != GL_NO_ERROR) {
             std::cerr << "OpenGL error: " << err << std::endl;
         }
-
-
 
         glfwPollEvents();
         glfwSwapBuffers(WINDOW);

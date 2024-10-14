@@ -49,20 +49,19 @@ ModelAndTextures ModelLoader::loadModel(const char* path)
     for (const tinygltf::Mesh& mesh : model.meshes) {
         for (const tinygltf::Primitive& primitive : mesh.primitives) {
 
-
+            //Get indices buffer
             const tinygltf::Accessor& indexAccessor = model.accessors[primitive.indices];
             const tinygltf::BufferView& indexBufferView = model.bufferViews[indexAccessor.bufferView];
             const tinygltf::Buffer& indexBuffer = model.buffers[indexBufferView.buffer];
-
             const unsigned char* indexBufferData = &indexBuffer.data[indexBufferView.byteOffset + indexAccessor.byteOffset];
 
-            // Get vertex position data
+            //Get vertex positions buffer
             const tinygltf::Accessor& positionAccessor = model.accessors[primitive.attributes.find("POSITION")->second];
             const tinygltf::BufferView& positionBufferView = model.bufferViews[positionAccessor.bufferView];
             const tinygltf::Buffer& positionBuffer = model.buffers[positionBufferView.buffer];
             const auto* positionBufferData = reinterpret_cast<const float*>(&positionBuffer.data[positionBufferView.byteOffset + positionAccessor.byteOffset]);
 
-            // Optionally, get texture coordinate data
+            //Get texture UVs buffer
             const tinygltf::Accessor& texCoordAccessor = model.accessors[primitive.attributes.find("TEXCOORD_0")->second];
             const tinygltf::BufferView& texCoordBufferView = model.bufferViews[texCoordAccessor.bufferView];
             const tinygltf::Buffer& texCoordBuffer = model.buffers[texCoordBufferView.buffer];
@@ -75,36 +74,33 @@ ModelAndTextures ModelLoader::loadModel(const char* path)
             size_t texStride = texCoordAccessor.ByteStride(texCoordBufferView);
             if (texStride == 0) texStride = sizeof(float) * 2; // Default stride if not specified
 
-
-
             GLuint vao, vbo, ebo, texvbo;
             glGenVertexArrays(1, &vao);
             glGenBuffers(1, &vbo);
             glGenBuffers(1, &texvbo);
             glGenBuffers(1, &ebo);
-            std::cout << "Genned vao: " << std::to_string(vao) << "\n";
 
             glBindVertexArray(vao);
+            //Indent operations on this vertex array object
+                GLenum postype = getGLTypeFromTinyGLTFComponentType(positionAccessor.componentType);
+                //Upload vertex position buffer
+                glBindBuffer(GL_ARRAY_BUFFER, vbo);
+                glBufferData(GL_ARRAY_BUFFER, positionBufferView.byteLength, positionBufferData, GL_STATIC_DRAW);
+                glVertexAttribPointer(0, 3, postype, GL_FALSE, posStride, (void*)0);  // Assume 3 floats per position
+                glEnableVertexAttribArray(0);
 
-            GLenum postype = getGLTypeFromTinyGLTFComponentType(positionAccessor.componentType);
-            // Upload vertex position data
-            glBindBuffer(GL_ARRAY_BUFFER, vbo);
-            glBufferData(GL_ARRAY_BUFFER, positionBufferView.byteLength, positionBufferData, GL_STATIC_DRAW);
-            glVertexAttribPointer(0, 3, postype, GL_FALSE, posStride, (void*)0);  // Assume 3 floats per position
-            glEnableVertexAttribArray(0);
+                GLenum textype = getGLTypeFromTinyGLTFComponentType(texCoordAccessor.componentType);
+                //Upload texture UVs buffer
+                glBindBuffer(GL_ARRAY_BUFFER, texvbo);
+                glBufferData(GL_ARRAY_BUFFER, texCoordBufferView.byteLength, texCoordBufferData, GL_STATIC_DRAW);
+                glVertexAttribPointer(1, 2, textype, GL_FALSE, texStride, (void*)0);  // Assume 2 floats per texture coordinate
+                glEnableVertexAttribArray(1);
 
-            GLenum textype = getGLTypeFromTinyGLTFComponentType(texCoordAccessor.componentType);
-            // Upload texture coordinate data
-            glBindBuffer(GL_ARRAY_BUFFER, texvbo);
-            glBufferData(GL_ARRAY_BUFFER, texCoordBufferView.byteLength, texCoordBufferData, GL_STATIC_DRAW);
-            glVertexAttribPointer(1, 2, textype, GL_FALSE, texStride, (void*)0);  // Assume 2 floats per texture coordinate
-            glEnableVertexAttribArray(1);
-
-            // Upload index data
-            GLenum indextype = getGLTypeFromTinyGLTFComponentType(indexAccessor.componentType);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexBufferView.byteLength, indexBufferData, GL_STATIC_DRAW);
-
+                //Upload indices buffer
+                GLenum indextype = getGLTypeFromTinyGLTFComponentType(indexAccessor.componentType);
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+                glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexBufferView.byteLength, indexBufferData, GL_STATIC_DRAW);
+            //End operations
             glBindVertexArray(0);
 
             modelGLObjects.emplace_back(ModelGLObjects{vbo,
@@ -150,7 +146,6 @@ ModelAndTextures ModelLoader::loadModel(const char* path)
             &image.image[0]   // pointer to the actual pixel data
         );
 
-
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -158,7 +153,7 @@ ModelAndTextures ModelLoader::loadModel(const char* path)
 
         texids.push_back(texid);
     }
-    std::cout << "Texids len: " << std::to_string(texids.size()) << "\n";
+
     return ModelAndTextures{modelGLObjects, texids};
 }
 
