@@ -8,12 +8,29 @@
 #include <tiny_gltf.h>
 #include <iostream>
 #include <string>
+#include <GL/glew.h>
+#include <GLFW/glfw3.h>
 
 namespace jl {
 
+typedef struct
+{
+    GLuint vbo;
+    GLuint texvbo;
+    GLuint vao;
+    GLuint ebo;
+    uint32_t indexcount;
+}ModelGLObjects;
+
+typedef struct
+{
+    std::vector<ModelGLObjects> modelGLObjects;
+    std::vector<GLuint> texids;
+}ModelAndTextures;
+
 class ModelLoader {
 public:
-static tinygltf::Model loadModel(const char* path);
+    static ModelAndTextures loadModel(const char* path);
 };
 
 } // jl

@@ -17,6 +17,9 @@ find_package(glm CONFIG REQUIRED)
 
 add_executable(MyGame src/main.cpp
         src/ModelLoader.cpp
-        src/Shader.cpp)
+        src/Shader.cpp
+        src/Camera.cpp
+        src/Transform.cpp
+)
 
 target_link_libraries(MyGame PRIVATE glfw glm::glm GLEW::GLEW)
