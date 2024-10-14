@@ -20,6 +20,8 @@ typedef struct
     GLuint vao;
     GLuint ebo;
     uint32_t indexcount;
+    GLenum drawmode;
+    GLenum indextype;
 }ModelGLObjects;
 
 typedef struct

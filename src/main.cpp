@@ -215,7 +215,7 @@ int main() {
         glUseProgram(SHADER->shaderID);
 
 
-        glUniformMatrix4fv(glGetUniformLocation(SHADER->shaderID, "mvp"), 1, GL_FALSE, glm::value_ptr(CAMERA.mvp));
+        //glUniformMatrix4fv(glGetUniformLocation(SHADER->shaderID, "mvp"), 1, GL_FALSE, glm::value_ptr(CAMERA.mvp));
 
 
         for(jl::ModelGLObjects &mglo : modelandtexs.modelGLObjects)
@@ -223,14 +223,17 @@ int main() {
             //std::cout << "Index count: " << std::to_string(mglo.indexcount) << "\n";
             glBindVertexArray(mglo.vao);
 
+            glUniformMatrix4fv(glGetUniformLocation(SHADER->shaderID, "mvp"), 1, GL_FALSE, glm::value_ptr(CAMERA.mvp));
+
+
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, modelandtexs.texids.at(0));
             glUniform1i(glGetUniformLocation(SHADER->shaderID, "texture1"), 0);
 
 
             glUniform3f(glGetUniformLocation(SHADER->shaderID, "pos"), 0.0, 0.0, 7.0);
-            glDrawElements(GL_TRIANGLES, mglo.indexcount, GL_UNSIGNED_INT, nullptr);
-
+            glDrawElements(mglo.drawmode, mglo.indexcount, mglo.indextype, nullptr);
+    
             glBindVertexArray(0);
         }
         GLenum err;

@@ -6,6 +6,19 @@
 
 namespace jl {
 
+GLenum getGLType(int componentType) {
+    switch (componentType) {
+    case TINYGLTF_COMPONENT_TYPE_BYTE: return GL_BYTE;
+    case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE: return GL_UNSIGNED_BYTE;
+    case TINYGLTF_COMPONENT_TYPE_SHORT: return GL_SHORT;
+    case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return GL_UNSIGNED_SHORT;
+    case TINYGLTF_COMPONENT_TYPE_INT: return GL_INT;
+    case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT: return GL_UNSIGNED_INT;
+    case TINYGLTF_COMPONENT_TYPE_FLOAT: return GL_FLOAT;
+    default: return GL_FLOAT; // Default fallback
+    }
+}
+
 ModelAndTextures ModelLoader::loadModel(const char* path)
 {
     tinygltf::Model model;
@@ -33,6 +46,8 @@ ModelAndTextures ModelLoader::loadModel(const char* path)
 
     for (const tinygltf::Mesh& mesh : model.meshes) {
         for (const tinygltf::Primitive& primitive : mesh.primitives) {
+
+
             const tinygltf::Accessor& indexAccessor = model.accessors[primitive.indices];
             const tinygltf::BufferView& indexBufferView = model.bufferViews[indexAccessor.bufferView];
             const tinygltf::Buffer& indexBuffer = model.buffers[indexBufferView.buffer];
@@ -51,6 +66,17 @@ ModelAndTextures ModelLoader::loadModel(const char* path)
             const tinygltf::Buffer& texCoordBuffer = model.buffers[texCoordBufferView.buffer];
             const auto* texCoordBufferData = reinterpret_cast<const float*>(&texCoordBuffer.data[texCoordBufferView.byteOffset + texCoordAccessor.byteOffset]);
 
+
+            // Determine stride for position data
+            size_t posStride = positionAccessor.ByteStride(positionBufferView);
+            if (posStride == 0) posStride = sizeof(float) * 3; // Default stride if not specified
+
+            // Determine stride for texture coordinate data
+            size_t texStride = texCoordAccessor.ByteStride(texCoordBufferView);
+            if (texStride == 0) texStride = sizeof(float) * 2; // Default stride if not specified
+
+
+
             GLuint vao, vbo, ebo, texvbo;
             glGenVertexArrays(1, &vao);
             glGenBuffers(1, &vbo);
@@ -60,25 +86,35 @@ ModelAndTextures ModelLoader::loadModel(const char* path)
 
             glBindVertexArray(vao);
 
+            GLenum postype = getGLType(positionAccessor.componentType);
             // Upload vertex position data
             glBindBuffer(GL_ARRAY_BUFFER, vbo);
             glBufferData(GL_ARRAY_BUFFER, positionBufferView.byteLength, positionBufferData, GL_STATIC_DRAW);
-            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);  // Assume 3 floats per position
+            glVertexAttribPointer(0, 3, postype, GL_FALSE, posStride, (void*)0);  // Assume 3 floats per position
             glEnableVertexAttribArray(0);
 
+            GLenum textype = getGLType(positionAccessor.componentType);
             // Upload texture coordinate data
             glBindBuffer(GL_ARRAY_BUFFER, texvbo);
             glBufferData(GL_ARRAY_BUFFER, texCoordBufferView.byteLength, texCoordBufferData, GL_STATIC_DRAW);
-            glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);  // Assume 2 floats per texture coordinate
+            glVertexAttribPointer(1, 2, textype, GL_FALSE, texStride, (void*)0);  // Assume 2 floats per texture coordinate
             glEnableVertexAttribArray(1);
 
             // Upload index data
+            GLenum indextype = getGLType(indexAccessor.componentType);
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
             glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexBufferView.byteLength, indexBufferData, GL_STATIC_DRAW);
 
             glBindVertexArray(0);
 
-            modelGLObjects.emplace_back(ModelGLObjects{vbo, texvbo, vao, ebo, static_cast<uint32_t>(indexAccessor.count)});
+            modelGLObjects.emplace_back(ModelGLObjects{vbo,
+                texvbo,
+                vao,
+                ebo,
+                static_cast<uint32_t>(indexAccessor.count),
+                static_cast<GLenum>(primitive.mode),
+                indextype
+            });
         }
     }
 
