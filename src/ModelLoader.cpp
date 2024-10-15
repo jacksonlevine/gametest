@@ -48,6 +48,15 @@ ModelAndTextures ModelLoader::loadModel(const char* path)
 
     for (const tinygltf::Mesh& mesh : model.meshes) {
         for (const tinygltf::Primitive& primitive : mesh.primitives) {
+            GLuint vao, vbo, ebo, texvbo;
+            glGenVertexArrays(1, &vao);
+            glGenBuffers(1, &vbo);
+            glGenBuffers(1, &texvbo);
+            glGenBuffers(1, &ebo);
+
+            glBindVertexArray(vao);
+
+
 
             //Get indices buffer
             const tinygltf::Accessor& indexAccessor = model.accessors[primitive.indices];
@@ -67,6 +76,13 @@ ModelAndTextures ModelLoader::loadModel(const char* path)
             const tinygltf::Buffer& texCoordBuffer = model.buffers[texCoordBufferView.buffer];
             const auto* texCoordBufferData = reinterpret_cast<const float*>(&texCoordBuffer.data[texCoordBufferView.byteOffset + texCoordAccessor.byteOffset]);
 
+            //Get boneids aka joints buffer
+            const tinygltf::Accessor& boneIDAccessor = model.accessors[primitive.attributes.find("JOINTS_0")->second];
+            const tinygltf::BufferView& boneIDBufferView = model.bufferViews[boneIDAccessor.bufferView];
+            const tinygltf::Buffer& boneIDBuffer = model.buffers[boneIDBufferView.buffer];
+            glBufferData(boneIDBufferView.target, boneIDBufferView.byteLength,
+                     &boneIDBuffer.data.at(0) + boneIDBufferView.byteOffset,
+                     GL_STATIC_DRAW);
 
             size_t posStride = positionAccessor.ByteStride(positionBufferView);
             if (posStride == 0) posStride = sizeof(float) * 3; // Default stride if not specified
@@ -74,13 +90,7 @@ ModelAndTextures ModelLoader::loadModel(const char* path)
             size_t texStride = texCoordAccessor.ByteStride(texCoordBufferView);
             if (texStride == 0) texStride = sizeof(float) * 2; // Default stride if not specified
 
-            GLuint vao, vbo, ebo, texvbo;
-            glGenVertexArrays(1, &vao);
-            glGenBuffers(1, &vbo);
-            glGenBuffers(1, &texvbo);
-            glGenBuffers(1, &ebo);
 
-            glBindVertexArray(vao);
             //Indent operations on this vertex array object
                 GLenum postype = getGLTypeFromTinyGLTFComponentType(positionAccessor.componentType);
                 //Upload vertex position buffer
