@@ -10,8 +10,15 @@
 #include <string>
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
 
 namespace jl {
+
+    extern GLuint SSBO;
+    extern size_t JOINT_COUNT;
+    extern tinygltf::Model MODEL;
+
+    void updateInterpolateBoneTransforms(float anim_time);
 
 typedef struct
 {

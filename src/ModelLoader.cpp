@@ -4,9 +4,11 @@
 
 #include "ModelLoader.h"
 #include <cassert>
+#include <glm/gtc/type_ptr.hpp>
 
 
 namespace jl {
+    tinygltf::Model MODEL;
 
 GLenum getGLTypeFromTinyGLTFComponentType(int componentType) {
     switch (componentType) {
@@ -38,6 +40,114 @@ int getNumberOfComponents(int acctype)
     return size;
 }
 
+GLuint createSSBOForBoneTransformsAndInvBindMats()
+{
+    GLuint ssbo;
+    glGenBuffers(1, &ssbo);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
+    glBufferData(GL_SHADER_STORAGE_BUFFER,
+                 sizeof(glm::mat4) * 500 * 2,
+                 nullptr,
+                 GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo);
+    return ssbo;
+}
+
+void storeBoneTransformsAndInvBindMats(
+    GLuint ssbo, void* boneData, void* invBindData)
+{
+    //Just 500 mat4's each, we'll hope over-reading doesnt segfault for now
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER,
+                    0,
+                    sizeof(glm::mat4) * JOINT_COUNT,
+                    boneData);
+
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER,
+                    sizeof(glm::mat4) * JOINT_COUNT,
+                    sizeof(glm::mat4) * JOINT_COUNT,
+                    invBindData);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+}
+
+    void storeBoneTransforms(
+    GLuint ssbo, void* boneData)
+{
+    //Just 500 mat4's each, we'll hope over-reading doesnt segfault for now
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER,
+                    0,
+                    sizeof(glm::mat4) * 500,
+                    boneData);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+}
+
+void updateInterpolateBoneTransforms(float anim_time) {
+    // Step 1: Access the animation
+    assert(MODEL.animations.size() > 0);
+    const tinygltf::Animation& animation = MODEL.animations.at(0); // Assuming the first animation is "walk"
+    std::vector<glm::mat4> newBoneTransforms(JOINT_COUNT);
+
+    // Step 2: Iterate through each channel in the animation
+    for (const auto& channel : animation.channels) {
+        // Access the input and output accessors directly from the channel
+        const tinygltf::Accessor& inputAccessor = MODEL.accessors[channel.sampler];
+        const tinygltf::Accessor& outputAccessor = MODEL.accessors[channel.sampler + 1]; // Assuming this is how the outputs are indexed
+
+        // Get keyframe data
+        const float* inputs = reinterpret_cast<const float*>(&MODEL.buffers[MODEL.bufferViews[inputAccessor.bufferView].buffer].data[inputAccessor.byteOffset]);
+        const glm::vec4* outputs = reinterpret_cast<const glm::vec4*>(&MODEL.buffers[MODEL.bufferViews[outputAccessor.bufferView].buffer].data[outputAccessor.byteOffset]);
+
+        // Assuming inputs are time values and outputs are transforms (translation, rotation, scale)
+        size_t numKeyframes = inputAccessor.count;
+
+        // Step 3: Interpolate for the target joint based on the channel
+        int jointNodeIndex = channel.target_node; // Get the joint index from the channel
+        const tinygltf::Node& jointNode = MODEL.nodes[jointNodeIndex];
+
+        glm::mat4 jointMatrix = glm::mat4(1.0f); // Initialize the joint matrix
+
+        // Interpolate keyframes for translation, rotation, and scale based on 'anim_time'
+        for (size_t k = 0; k < numKeyframes - 1; ++k) {
+            if (anim_time >= inputs[k] && anim_time <= inputs[k + 1]) {
+                // Linear interpolation
+                float t = (anim_time - inputs[k]) / (inputs[k + 1] - inputs[k]);
+
+                glm::vec3 translation = glm::mix(glm::vec3(outputs[k].x, outputs[k].y, outputs[k].z),
+                                                  glm::vec3(outputs[k + 1].x, outputs[k + 1].y, outputs[k + 1].z), t);
+                glm::quat rotation = glm::slerp(glm::quat(outputs[k].w, outputs[k].x, outputs[k].y, outputs[k].z),
+                                                 glm::quat(outputs[k + 1].w, outputs[k + 1].x, outputs[k + 1].y, outputs[k + 1].z), t);
+                glm::vec3 scale = glm::mix(glm::vec3(1.0f), glm::vec3(outputs[k + 1].w, outputs[k + 1].x, outputs[k + 1].y), t);
+
+                // Construct the transformation matrix: Scale -> Rotate -> Translate
+                glm::mat4 scaleMatrix = glm::scale(glm::mat4(1.0f), scale);
+                glm::mat4 rotationMatrix = glm::mat4_cast(rotation);
+                glm::mat4 translationMatrix = glm::translate(glm::mat4(1.0f), translation);
+
+                // Ensure the joint matrix is in the correct order for GLSL (column-major)
+                jointMatrix = translationMatrix * rotationMatrix * scaleMatrix;
+
+                break; // Exit the loop after processing the current joint
+            }
+        }
+
+        // Store the joint transform, converting to column-major order
+        // Note: glm::value_ptr is used to get the pointer for row-major ordering
+        glm::mat4 colMajorJointMatrix = glm::transpose(jointMatrix);
+        newBoneTransforms[jointNodeIndex] = colMajorJointMatrix; // Store the transpose for column-major layout
+    }
+
+    // Store all bone transforms in the buffer for use in the shader
+    storeBoneTransforms(SSBO, newBoneTransforms.data());
+}
+
+
+//Globals for now, testing
+GLuint SSBO = 0;
+size_t JOINT_COUNT = 0;
+
 ModelAndTextures ModelLoader::loadModel(const char* path)
 {
     tinygltf::Model model;
@@ -59,6 +169,8 @@ ModelAndTextures ModelLoader::loadModel(const char* path)
     if (!ret) {
         std::cout << "Failed to parse glTF at " << path << "\n";
     }
+
+    MODEL = model;
 
     std::vector<ModelGLObjects> modelGLObjects;
     std::vector<GLuint> texids;
@@ -186,6 +298,80 @@ ModelAndTextures ModelLoader::loadModel(const char* path)
 
         texids.push_back(texid);
     }
+
+    assert(model.skins.size() == 1); //just joking
+    SSBO = createSSBOForBoneTransformsAndInvBindMats();
+    tinygltf::Skin& skin = model.skins.at(0);
+    const std::vector<int>& joints = skin.joints;
+    const size_t numJoints = joints.size();
+    JOINT_COUNT = numJoints;
+
+    const tinygltf::Accessor& invBindMatricesAccessor = model.accessors[skin.inverseBindMatrices];
+    const tinygltf::BufferView& invBindMatricesBufferView = model.bufferViews[invBindMatricesAccessor.bufferView];
+    const tinygltf::Buffer& invBindMatricesBuffer = model.buffers[invBindMatricesBufferView.buffer];
+
+    // Inverse bind matrices are stored as mat4 (16 floats)
+    const float* invBindMatricesData = reinterpret_cast<const float*>(
+        &invBindMatricesBuffer.data[invBindMatricesBufferView.byteOffset + invBindMatricesAccessor.byteOffset]);
+
+    // Store the inverse bind matrices in a std::vector of glm::mat4
+    std::vector<glm::mat4> inverseBindMatrices(numJoints);
+    for (size_t i = 0; i < numJoints; ++i) {
+        inverseBindMatrices[i] = glm::make_mat4(&invBindMatricesData[i * 16]);  // 16 floats per mat4
+    }
+
+    // Step 3: Get the current joint (bone) transforms
+    std::vector<glm::mat4> boneTransforms(numJoints);
+    for (size_t i = 0; i < numJoints; ++i) {
+        int jointNodeIndex = joints[i];  // Index of the node in the model's node list
+        const tinygltf::Node& jointNode = model.nodes[jointNodeIndex];
+
+        glm::mat4 jointMatrix;
+
+        // If the node has a matrix, use it
+        if (!jointNode.matrix.empty()) {
+            // Assuming jointNode.matrix is a std::vector<double> or similar type with 16 elements
+            jointMatrix = glm::make_mat4(jointNode.matrix.data());
+        } else {
+            // Otherwise, compose the matrix from translation, rotation, and scale
+
+            // Check if translation, rotation, and scale vectors are correctly populated
+            glm::vec3 translation(0.0f);
+            if (jointNode.translation.size() >= 3) {
+                translation = glm::vec3(jointNode.translation[0],
+                                         jointNode.translation[1],
+                                         jointNode.translation[2]);
+            }
+
+            glm::vec3 scale(1.0f);
+            if (jointNode.scale.size() >= 3) {
+                scale = glm::vec3(jointNode.scale[0],
+                                  jointNode.scale[1],
+                                  jointNode.scale[2]);
+            }
+
+            glm::quat rotation = glm::quat(1, 0, 0, 0); // Identity rotation
+            if (jointNode.rotation.size() >= 4) {
+                rotation = glm::quat(jointNode.rotation[3], // w
+                                     jointNode.rotation[0], // x
+                                     jointNode.rotation[1], // y
+                                     jointNode.rotation[2]); // z
+            }
+
+            // Construct the transformation matrix: Scale -> Rotate -> Translate
+            glm::mat4 scaleMatrix = glm::scale(glm::mat4(1.0), scale);
+            glm::mat4 rotationMatrix = glm::mat4_cast(rotation);
+            glm::mat4 translationMatrix = glm::translate(glm::mat4(1.0), translation);
+
+            // Note the order of multiplication
+            jointMatrix = translationMatrix * rotationMatrix * scaleMatrix;
+        }
+
+        // Store the joint transform (which may be animated later)
+        boneTransforms[i] = jointMatrix;
+    }
+
+    storeBoneTransformsAndInvBindMats(SSBO, boneTransforms.data(), inverseBindMatrices.data());
 
     return ModelAndTextures{modelGLObjects, texids};
 }

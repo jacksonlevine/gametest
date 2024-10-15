@@ -101,6 +101,8 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
     }
 }
 
+
+
 int main() {
 
     if (glfwInit() != GLFW_TRUE)
@@ -133,6 +135,8 @@ int main() {
 
     jl::ModelAndTextures modelandtexs = jl::ModelLoader::loadModel("assets/models/player.glb");
 
+
+
     while(!glfwWindowShouldClose(WINDOW))
     {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -153,6 +157,8 @@ int main() {
         glUniform1i(glGetUniformLocation(SHADER->shaderID, "texture1"), 0);
         glUniform3f(glGetUniformLocation(SHADER->shaderID, "pos"), 0.0, 0.0, 3.0);
 
+        glUniform1i(glGetUniformLocation(SHADER->shaderID, "jointCount"), jl::JOINT_COUNT);
+
         for(jl::ModelGLObjects &mglo : modelandtexs.modelGLObjects)
         {
             glBindVertexArray(mglo.vao);
@@ -161,6 +167,8 @@ int main() {
 
             glBindVertexArray(0);
         }
+
+        jl::updateInterpolateBoneTransforms(std::fmod(glfwGetTime(), 10.0));
 
         //Flush out any GL errors
         GLenum err;
