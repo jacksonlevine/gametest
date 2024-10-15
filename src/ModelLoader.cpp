@@ -48,70 +48,68 @@ ModelAndTextures ModelLoader::loadModel(const char* path)
 
     for (const tinygltf::Mesh& mesh : model.meshes) {
         for (const tinygltf::Primitive& primitive : mesh.primitives) {
-            GLuint vao, vbo, ebo, texvbo;
+            GLuint vao, vbo, ebo, boneidvbo, weightvbo, texvbo;
+
             glGenVertexArrays(1, &vao);
             glGenBuffers(1, &vbo);
             glGenBuffers(1, &texvbo);
+            glGenBuffers(1, &boneidvbo);
+            glGenBuffers(1, &weightvbo);
             glGenBuffers(1, &ebo);
 
             glBindVertexArray(vao);
-
-
-
-            //Get indices buffer
-            const tinygltf::Accessor& indexAccessor = model.accessors[primitive.indices];
-            const tinygltf::BufferView& indexBufferView = model.bufferViews[indexAccessor.bufferView];
-            const tinygltf::Buffer& indexBuffer = model.buffers[indexBufferView.buffer];
-            const unsigned char* indexBufferData = &indexBuffer.data[indexBufferView.byteOffset + indexAccessor.byteOffset];
-
-            //Get vertex positions buffer
-            const tinygltf::Accessor& positionAccessor = model.accessors[primitive.attributes.find("POSITION")->second];
-            const tinygltf::BufferView& positionBufferView = model.bufferViews[positionAccessor.bufferView];
-            const tinygltf::Buffer& positionBuffer = model.buffers[positionBufferView.buffer];
-            const auto* positionBufferData = reinterpret_cast<const float*>(&positionBuffer.data[positionBufferView.byteOffset + positionAccessor.byteOffset]);
-
-            //Get texture UVs buffer
-            const tinygltf::Accessor& texCoordAccessor = model.accessors[primitive.attributes.find("TEXCOORD_0")->second];
-            const tinygltf::BufferView& texCoordBufferView = model.bufferViews[texCoordAccessor.bufferView];
-            const tinygltf::Buffer& texCoordBuffer = model.buffers[texCoordBufferView.buffer];
-            const auto* texCoordBufferData = reinterpret_cast<const float*>(&texCoordBuffer.data[texCoordBufferView.byteOffset + texCoordAccessor.byteOffset]);
-
-            //Get boneids aka joints buffer
-            const tinygltf::Accessor& boneIDAccessor = model.accessors[primitive.attributes.find("JOINTS_0")->second];
-            const tinygltf::BufferView& boneIDBufferView = model.bufferViews[boneIDAccessor.bufferView];
-            const tinygltf::Buffer& boneIDBuffer = model.buffers[boneIDBufferView.buffer];
-            glBufferData(boneIDBufferView.target, boneIDBufferView.byteLength,
-                     &boneIDBuffer.data.at(0) + boneIDBufferView.byteOffset,
-                     GL_STATIC_DRAW);
-
-            size_t posStride = positionAccessor.ByteStride(positionBufferView);
-            if (posStride == 0) posStride = sizeof(float) * 3; // Default stride if not specified
-
-            size_t texStride = texCoordAccessor.ByteStride(texCoordBufferView);
-            if (texStride == 0) texStride = sizeof(float) * 2; // Default stride if not specified
-
-
             //Indent operations on this vertex array object
-                GLenum postype = getGLTypeFromTinyGLTFComponentType(positionAccessor.componentType);
-                //Upload vertex position buffer
-                glBindBuffer(GL_ARRAY_BUFFER, vbo);
-                glBufferData(GL_ARRAY_BUFFER, positionBufferView.byteLength, positionBufferData, GL_STATIC_DRAW);
-                glVertexAttribPointer(0, 3, postype, GL_FALSE, posStride, (void*)0);  // Assume 3 floats per position
+                //Get vertex positions buffer from gltf
+                const tinygltf::Accessor& positionAccessor = model.accessors[primitive.attributes.find("POSITION")->second];
+                const tinygltf::BufferView& positionBufferView = model.bufferViews[positionAccessor.bufferView];
+                const tinygltf::Buffer& positionBuffer = model.buffers[positionBufferView.buffer];
+                glBindBuffer(positionBufferView.target, vbo);
+                glBufferData(positionBufferView.target, positionBufferView.byteLength,
+                         &positionBuffer.data.at(0) + positionBufferView.byteOffset,
+                         GL_STATIC_DRAW);
+                const GLenum postype = getGLTypeFromTinyGLTFComponentType(positionAccessor.componentType);
+                glVertexAttribPointer(0, 3, postype, GL_FALSE, positionAccessor.ByteStride(positionBufferView), nullptr);
                 glEnableVertexAttribArray(0);
 
-                GLenum textype = getGLTypeFromTinyGLTFComponentType(texCoordAccessor.componentType);
-                //Upload texture UVs buffer
-                glBindBuffer(GL_ARRAY_BUFFER, texvbo);
-                glBufferData(GL_ARRAY_BUFFER, texCoordBufferView.byteLength, texCoordBufferData, GL_STATIC_DRAW);
-                glVertexAttribPointer(1, 2, textype, GL_FALSE, texStride, (void*)0);  // Assume 2 floats per texture coordinate
+
+
+                //Get texture UVs buffer from gltf
+                const tinygltf::Accessor& texCoordAccessor = model.accessors[primitive.attributes.find("TEXCOORD_0")->second];
+                const tinygltf::BufferView& texCoordBufferView = model.bufferViews[texCoordAccessor.bufferView];
+                const tinygltf::Buffer& texCoordBuffer = model.buffers[texCoordBufferView.buffer];
+                glBindBuffer(texCoordBufferView.target, texvbo);
+                glBufferData(texCoordBufferView.target, texCoordBufferView.byteLength,
+                         &texCoordBuffer.data.at(0) + texCoordBufferView.byteOffset,
+                         GL_STATIC_DRAW);
+                const GLenum textype = getGLTypeFromTinyGLTFComponentType(texCoordAccessor.componentType);
+                glVertexAttribPointer(1, 2, textype, GL_FALSE, texCoordAccessor.ByteStride(texCoordBufferView), nullptr);
                 glEnableVertexAttribArray(1);
 
-                //Upload indices buffer
-                GLenum indextype = getGLTypeFromTinyGLTFComponentType(indexAccessor.componentType);
-                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-                glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexBufferView.byteLength, indexBufferData, GL_STATIC_DRAW);
-            //End operations
+                //Get boneids aka joints buffer
+                const tinygltf::Accessor& boneIDAccessor = model.accessors[primitive.attributes.find("JOINTS_0")->second];
+                const tinygltf::BufferView& boneIDBufferView = model.bufferViews[boneIDAccessor.bufferView];
+                const tinygltf::Buffer& boneIDBuffer = model.buffers[boneIDBufferView.buffer];
+                glBindBuffer(boneIDBufferView.target, boneidvbo);
+                glBufferData(boneIDBufferView.target, boneIDBufferView.byteLength,
+                         &boneIDBuffer.data.at(0) + boneIDBufferView.byteOffset,
+                         GL_STATIC_DRAW);
+                const GLenum boneidtype = getGLTypeFromTinyGLTFComponentType(boneIDAccessor.componentType);
+                glVertexAttribPointer(2, 4, boneidtype, GL_FALSE, boneIDAccessor.ByteStride(boneIDBufferView), nullptr);
+                glEnableVertexAttribArray(2);
+
+
+                //Get indices buffer from gltf
+                const tinygltf::Accessor& indexAccessor = model.accessors[primitive.indices];
+                const tinygltf::BufferView& indexBufferView = model.bufferViews[indexAccessor.bufferView];
+                const tinygltf::Buffer& indexBuffer = model.buffers[indexBufferView.buffer];
+                glBindBuffer(indexBufferView.target, ebo);
+                glBufferData(indexBufferView.target, indexBufferView.byteLength,
+                         &indexBuffer.data.at(0) + indexBufferView.byteOffset,
+                         GL_STATIC_DRAW);
+                //Leave the vao with the index buffer bound, ready to go for drawElements
             glBindVertexArray(0);
+
+            const GLenum indextype = getGLTypeFromTinyGLTFComponentType(indexAccessor.componentType); //We need this when we draw it too for some reason, so holding on to it
 
             modelGLObjects.emplace_back(ModelGLObjects{vbo,
                 texvbo,
