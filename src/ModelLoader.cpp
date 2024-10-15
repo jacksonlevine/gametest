@@ -21,6 +21,23 @@ GLenum getGLTypeFromTinyGLTFComponentType(int componentType) {
     }
 }
 
+int getNumberOfComponents(int acctype)
+{
+    int size = 1;
+    if (acctype == TINYGLTF_TYPE_SCALAR) {
+        size = 1;
+    } else if (acctype == TINYGLTF_TYPE_VEC2) {
+        size = 2;
+    } else if (acctype == TINYGLTF_TYPE_VEC3) {
+        size = 3;
+    } else if (acctype == TINYGLTF_TYPE_VEC4) {
+        size = 4;
+    } else {
+        assert(0);
+    }
+    return size;
+}
+
 ModelAndTextures ModelLoader::loadModel(const char* path)
 {
     tinygltf::Model model;
@@ -59,7 +76,7 @@ ModelAndTextures ModelLoader::loadModel(const char* path)
 
             glBindVertexArray(vao);
             //Indent operations on this vertex array object
-                //Get vertex positions buffer from gltf
+                //Vertex positions buffer
                 const tinygltf::Accessor& positionAccessor = model.accessors[primitive.attributes.find("POSITION")->second];
                 const tinygltf::BufferView& positionBufferView = model.bufferViews[positionAccessor.bufferView];
                 const tinygltf::Buffer& positionBuffer = model.buffers[positionBufferView.buffer];
@@ -67,13 +84,11 @@ ModelAndTextures ModelLoader::loadModel(const char* path)
                 glBufferData(positionBufferView.target, positionBufferView.byteLength,
                          &positionBuffer.data.at(0) + positionBufferView.byteOffset,
                          GL_STATIC_DRAW);
-                const GLenum postype = getGLTypeFromTinyGLTFComponentType(positionAccessor.componentType);
-                glVertexAttribPointer(0, 3, postype, GL_FALSE, positionAccessor.ByteStride(positionBufferView), nullptr);
+                glVertexAttribPointer(0, getNumberOfComponents(positionAccessor.type), positionAccessor.componentType, positionAccessor.normalized ? GL_TRUE : GL_FALSE, positionAccessor.ByteStride(positionBufferView), nullptr);
                 glEnableVertexAttribArray(0);
 
 
-
-                //Get texture UVs buffer from gltf
+                //Texture UVs buffer
                 const tinygltf::Accessor& texCoordAccessor = model.accessors[primitive.attributes.find("TEXCOORD_0")->second];
                 const tinygltf::BufferView& texCoordBufferView = model.bufferViews[texCoordAccessor.bufferView];
                 const tinygltf::Buffer& texCoordBuffer = model.buffers[texCoordBufferView.buffer];
@@ -81,11 +96,10 @@ ModelAndTextures ModelLoader::loadModel(const char* path)
                 glBufferData(texCoordBufferView.target, texCoordBufferView.byteLength,
                          &texCoordBuffer.data.at(0) + texCoordBufferView.byteOffset,
                          GL_STATIC_DRAW);
-                const GLenum textype = getGLTypeFromTinyGLTFComponentType(texCoordAccessor.componentType);
-                glVertexAttribPointer(1, 2, textype, GL_FALSE, texCoordAccessor.ByteStride(texCoordBufferView), nullptr);
+                glVertexAttribPointer(1, getNumberOfComponents(texCoordAccessor.type), texCoordAccessor.componentType, texCoordAccessor.normalized ? GL_TRUE : GL_FALSE, texCoordAccessor.ByteStride(texCoordBufferView), nullptr);
                 glEnableVertexAttribArray(1);
 
-                //Get boneids aka joints buffer
+                //Boneids aka joints buffer
                 const tinygltf::Accessor& boneIDAccessor = model.accessors[primitive.attributes.find("JOINTS_0")->second];
                 const tinygltf::BufferView& boneIDBufferView = model.bufferViews[boneIDAccessor.bufferView];
                 const tinygltf::Buffer& boneIDBuffer = model.buffers[boneIDBufferView.buffer];
@@ -93,12 +107,22 @@ ModelAndTextures ModelLoader::loadModel(const char* path)
                 glBufferData(boneIDBufferView.target, boneIDBufferView.byteLength,
                          &boneIDBuffer.data.at(0) + boneIDBufferView.byteOffset,
                          GL_STATIC_DRAW);
-                const GLenum boneidtype = getGLTypeFromTinyGLTFComponentType(boneIDAccessor.componentType);
-                glVertexAttribPointer(2, 4, boneidtype, GL_FALSE, boneIDAccessor.ByteStride(boneIDBufferView), nullptr);
+                glVertexAttribPointer(2, getNumberOfComponents(boneIDAccessor.type), boneIDAccessor.componentType, boneIDAccessor.normalized ? GL_TRUE : GL_FALSE, boneIDAccessor.ByteStride(boneIDBufferView), nullptr);
                 glEnableVertexAttribArray(2);
 
+                //Weights buffer
+                const tinygltf::Accessor& weightsAccessor = model.accessors[primitive.attributes.find("WEIGHTS_0")->second];
+                const tinygltf::BufferView& weightsBufferView = model.bufferViews[weightsAccessor.bufferView];
+                const tinygltf::Buffer& weightsBuffer = model.buffers[weightsBufferView.buffer];
+                glBindBuffer(weightsBufferView.target, weightvbo);
+                glBufferData(weightsBufferView.target, weightsBufferView.byteLength,
+                         &weightsBuffer.data.at(0) + weightsBufferView.byteOffset,
+                         GL_STATIC_DRAW);
+                glVertexAttribPointer(3, getNumberOfComponents(positionAccessor.type), weightsAccessor.componentType, weightsAccessor.normalized ? GL_TRUE : GL_FALSE, weightsAccessor.ByteStride(weightsBufferView), nullptr);
+                glEnableVertexAttribArray(3);
 
-                //Get indices buffer from gltf
+
+                //Indices buffer
                 const tinygltf::Accessor& indexAccessor = model.accessors[primitive.indices];
                 const tinygltf::BufferView& indexBufferView = model.bufferViews[indexAccessor.bufferView];
                 const tinygltf::Buffer& indexBuffer = model.buffers[indexBufferView.buffer];
@@ -108,6 +132,7 @@ ModelAndTextures ModelLoader::loadModel(const char* path)
                          GL_STATIC_DRAW);
                 //Leave the vao with the index buffer bound, ready to go for drawElements
             glBindVertexArray(0);
+
 
             const GLenum indextype = getGLTypeFromTinyGLTFComponentType(indexAccessor.componentType); //We need this when we draw it too for some reason, so holding on to it
 
