@@ -168,7 +168,7 @@ int main() {
             glBindVertexArray(0);
         }
 
-        jl::updateInterpolateBoneTransforms(std::fmod(glfwGetTime(), 10.0));
+        //jl::updateInterpolateBoneTransforms(std::fmod(glfwGetTime(), 10.0));
 
         //Flush out any GL errors
         GLenum err;
