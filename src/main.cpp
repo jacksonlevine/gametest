@@ -105,7 +105,7 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 
 int main() {
 
-    if (glfwInit() != GLFW_TRUE)
+    if ( glfwInit() != GLFW_TRUE )
     {
         std::cout << "Couldn't initialize glfw.\n";
     }
@@ -118,7 +118,7 @@ int main() {
     glfwSetMouseButtonCallback(WINDOW, mouseButtonCallback);
     glfwSetKeyCallback(WINDOW, keyCallback);
 
-    if(glewInit() != GLEW_OK)
+    if( glewInit() != GLEW_OK )
     {
         std::cout << "Couldn't initialize glew! \n";
     }
@@ -127,8 +127,8 @@ int main() {
 
     glViewport(0, 0, SCREENWIDTH.load(), SCREENHEIGHT.load());
     glClearColor(0.5, 0.5, 0.5, 1.0);
-    glEnable(GL_DEPTH_TEST);
-    glDisable(GL_CULL_FACE);
+    glEnable( GL_DEPTH_TEST );
+    glDisable( GL_CULL_FACE );
 
     jl::Shader gltfShader = getBasicGLTFShader();
     SHADER = &gltfShader;

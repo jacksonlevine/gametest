@@ -20,6 +20,9 @@ add_executable(MyGame src/main.cpp
         src/Shader.cpp
         src/Camera.cpp
         src/Transform.cpp
+        src/Matrix.cpp
+        src/Trackball.cpp
+        src/Skinning.cpp
 )
 
 target_link_libraries(MyGame PRIVATE glfw glm::glm GLEW::GLEW)
